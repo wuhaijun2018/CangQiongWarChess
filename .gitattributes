@@ -1,0 +1,21 @@
+# Unity metadata
+Library/               export-ignore
+Temp/                  export-ignore
+obj/                   export-ignore
+*.log                  export-ignore
+
+# Large binary assets (use LFS)
+*.png                  filter=lfs diff=lfs merge=lfs -z
+*.jpg                  filter=lfs diff=lfs merge=lfs -z
+*.wav                  filter=lfs diff=lfs merge=lfs -z
+*.ogg                  filter=lfs diff=lfs merge=lfs -z
+*.mp3                  filter=lfs diff=lfs merge=lfs -z
+*.mp4                  filter=lfs diff=lfs merge=lfs -z
+*.psd                  filter=lfs diff=lfs merge=lfs -z
+*.tiff                 filter=lfs diff=lfs merge=lfs -z
+*.anim                 filter=lfs diff=lfs merge=lfs -z
+*.asset                filter=lfs diff=lfs merge=lfs -z
+*.unitypackage         filter=lfs diff=lfs merge=lfs -z
+*.nupkg                filter=lfs diff=lfs merge=lfs -z
+Build/                 export-ignore
+steam/content/         export-ignore

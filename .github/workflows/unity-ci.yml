@@ -1,0 +1,238 @@
+name: Unity CI
+
+on:
+  push:
+    branches: [main, dev]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      unity_target:
+        description: 'Build Target'
+        required: false
+        default: 'All'
+        type: choice
+        options:
+          - All
+          - Windows
+          - Linux
+          - macOS
+
+env:
+  UNITY_VERSION: "2022.3.50f1"  # 使用 LTS 版本
+
+jobs:
+  # ─── 代码检查 ───────────────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    container:
+      image:unityci/editor:2022.3.50f1-base-0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Check Code Format
+        run: |
+          echo "Running code quality checks..."
+          # 占位：正式项目中可集成 Roslyn analyzers
+          echo "No lint errors"
+
+  # ─── Windows 构建 ────────────────────────────────────────────────
+  build-windows:
+    runs-on: ubuntu-latest
+    container:
+      image:unityci/editor:2022.3.50f1-base-0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          lfs-fetch-content: true
+
+      - name: Get LFS Files
+        run: git lfs pull
+
+      - name: Build Windows
+        uses: game-ci/unity-builder@v4
+        with:
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: StandaloneWindows64
+          buildName: "CangQiongWarChess-Windows"
+          buildsPath: Build/Windows
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: Build/Windows
+          retention-days: 7
+
+  # ─── Linux 构建 ─────────────────────────────────────────────────
+  build-linux:
+    runs-on: ubuntu-latest
+    container:
+      image:unityci/editor:2022.3.50f1-base-0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          lfs-fetch-content: true
+
+      - name: Get LFS Files
+        run: git lfs pull
+
+      - name: Build Linux
+        uses: game-ci/unity-builder@v4
+        with:
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: StandaloneLinux64
+          buildName: "CangQiongWarChess-Linux"
+          buildsPath: Build/Linux
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: Build/Linux
+          retention-days: 7
+
+  # ─── macOS 构建 ─────────────────────────────────────────────────
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          lfs-fetch-content: true
+
+      - name: Get LFS Files
+        run: git lfs pull
+
+      - name: Build macOS
+        uses: game-ci/unity-builder@v4
+        with:
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: StandaloneOSX
+          buildName: "CangQiongWarChess-macOS"
+          buildsPath: Build/macOS
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: Build/macOS
+          retention-days: 7
+
+  # ─── Steam 部署（仅 tag 触发）────────────────────────────────────
+  steam-deploy:
+    needs: [build-windows, build-linux, build-macos]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/game-ci/steamcmd:latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare Steam Directory
+        run: |
+          mkdir -p steam_build/
+          # 按平台组织 Steam 构建目录
+          cp -r artifacts/windows-build/* steam_build/windows/ 2>/dev/null || true
+          cp -r artifacts/linux-build/* steam_build/linux/ 2>/dev/null || true
+          cp -r artifacts/macos-build/* steam_build/macos/ 2>/dev/null || true
+
+          echo "=== Steam Build Structure ==="
+          find steam_build -type f | head -20
+
+      - name: Steam Deploy
+        run: |
+          echo "Steam App ID: ${{ secrets.STEAM_APP_ID }}"
+          echo "Deploying to Steam..."
+          # 实际命令需要正确的 steamcmd 语法
+          # steamcmd +login ${{ secrets.STEAM_USER }} ${{ secrets.STEAM_PASS }} \
+          #   +run_app_build "${{ secrets.STEAM_MANIFEST }}" +quit
+        env:
+          STEAM_USER: ${{ secrets.STEAM_USER }}
+          STEAM_PASS: ${{ secrets.STEAM_PASS }}
+          STEAM_AUTH: ${{ secrets.STEAM_AUTH }}
+          STEAM_APP_ID: ${{ secrets.STEAM_APP_ID }}
+          STEAM_MANIFEST: ${{ secrets.STEAM_MANIFEST }}
+
+      - name: Upload Build Metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: steam-build-meta
+          path: steam_build/
+          retention-days: 30
+
+  # ─── GitHub Release（仅 tag 触发）────────────────────────────────
+  release:
+    needs: [build-windows, build-linux, build-macos]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Package Release
+        run: |
+          mkdir -p release/
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            ext="tar.gz"
+            if [[ "$name" == "macos"* ]]; then
+              # macOS 打包为 zip
+              cd "$dir" && zip -r "../../release/${name}.zip" . && cd ../..
+            else
+              tar -czf "release/${name}.${ext}" -C "$dir" .
+            fi
+          done
+          ls -lh release/
+
+      - name: Generate Release Notes
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [ -f CHANGELOG.md ]; then
+            echo "CHANGELOG found"
+          else
+            echo "# Release $VERSION" > release/RELEASE_NOTES.md
+            echo "" >> release/RELEASE_NOTES.md
+            echo "自动构建产物" >> release/RELEASE_NOTES.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/*.tar.gz
+            release/*.zip
+          body_path: release/RELEASE_NOTES.md

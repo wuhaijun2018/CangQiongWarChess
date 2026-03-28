@@ -1,0 +1,45 @@
+//
+// 苍穹战棋 - Steam 构建 Manifest
+// 使用 steamcmd 上传
+//
+// 用法：
+//   steamcmd +login USER PASS +run_app_build /path/to/app_build_cangqiong.vdf +quit
+//
+// 正式发布前需要将 PLACEHOLDER 替换为真实 Steam App ID
+//
+
+"appbuild"
+{
+    "appid"    "PLACEHOLDER_APP_ID"      // ⚠️ 替换为真实 App ID
+    "desc"    "苍穹战棋 Release $VERSION"   // 构建描述（显示在 Steam）
+    "buildoutput"    "build/"              // 构建输出目录
+
+    // contentroot 下的目录结构对应 Steam depot 配置
+    "contentroot"    "steam_build/"
+
+    "setlive"
+    {
+        "beta"    ""                        // 空 = 公测分支
+        "description"    "Release Build"
+    }
+
+    "local"    ""                           // 可选：本地测试路径
+
+    "files"
+    {
+        // 每个平台对应一个 depot
+        // depot ID 在 Steam Partner 后台创建
+        "includedepots"
+        {
+            "windows"    "PLACEHOLDER_DEPOT_WINDOWS"   // ⚠️ 替换
+            "linux"      "PLACEHOLDER_DEPOT_LINUX"     // ⚠️ 替换
+            "macos"      "PLACEHOLDER_DEPOT_MACOS"     // ⚠️ 替换
+        }
+    }
+
+    // 差异化更新配置
+    "dispatch"    ""
+
+    // 自动清理旧构建（保留最近3个）
+    "prune"    "3"
+}
