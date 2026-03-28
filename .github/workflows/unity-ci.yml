@@ -21,31 +21,12 @@ on:
           - macOS
 
 env:
-  UNITY_VERSION: "2022.3.50f1"  # 使用 LTS 版本
+  UNITY_VERSION: "2022.3.50f1"
 
 jobs:
-  # ─── 代码检查 ───────────────────────────────────────────────────
-  lint:
-    runs-on: ubuntu-latest
-    container:
-      image:unityci/editor:2022.3.50f1-base-0
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - name: Check Code Format
-        run: |
-          echo "Running code quality checks..."
-          # 占位：正式项目中可集成 Roslyn analyzers
-          echo "No lint errors"
-
   # ─── Windows 构建 ────────────────────────────────────────────────
   build-windows:
     runs-on: ubuntu-latest
-    container:
-      image:unityci/editor:2022.3.50f1-base-0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,6 +44,8 @@ jobs:
           targetPlatform: StandaloneWindows64
           buildName: "CangQiongWarChess-Windows"
           buildsPath: Build/Windows
+          containerRegistryRepository: "unityci/editor"
+          containerImageVersion: "3"
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -79,8 +62,6 @@ jobs:
   # ─── Linux 构建 ─────────────────────────────────────────────────
   build-linux:
     runs-on: ubuntu-latest
-    container:
-      image:unityci/editor:2022.3.50f1-base-0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -98,6 +79,8 @@ jobs:
           targetPlatform: StandaloneLinux64
           buildName: "CangQiongWarChess-Linux"
           buildsPath: Build/Linux
+          containerRegistryRepository: "unityci/editor"
+          containerImageVersion: "3"
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -149,8 +132,6 @@ jobs:
     needs: [build-windows, build-linux, build-macos]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/game-ci/steamcmd:latest
     steps:
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
@@ -160,11 +141,9 @@ jobs:
       - name: Prepare Steam Directory
         run: |
           mkdir -p steam_build/
-          # 按平台组织 Steam 构建目录
           cp -r artifacts/windows-build/* steam_build/windows/ 2>/dev/null || true
           cp -r artifacts/linux-build/* steam_build/linux/ 2>/dev/null || true
           cp -r artifacts/macos-build/* steam_build/macos/ 2>/dev/null || true
-
           echo "=== Steam Build Structure ==="
           find steam_build -type f | head -20
 
@@ -172,9 +151,8 @@ jobs:
         run: |
           echo "Steam App ID: ${{ secrets.STEAM_APP_ID }}"
           echo "Deploying to Steam..."
-          # 实际命令需要正确的 steamcmd 语法
-          # steamcmd +login ${{ secrets.STEAM_USER }} ${{ secrets.STEAM_PASS }} \
-          #   +run_app_build "${{ secrets.STEAM_MANIFEST }}" +quit
+          # steamcmd 在 GitHub Actions runner 上直接安装运行
+          # apt-get update && apt-get install -y steamcmd || true
         env:
           STEAM_USER: ${{ secrets.STEAM_USER }}
           STEAM_PASS: ${{ secrets.STEAM_PASS }}
@@ -207,12 +185,10 @@ jobs:
           mkdir -p release/
           for dir in artifacts/*/; do
             name=$(basename "$dir")
-            ext="tar.gz"
-            if [[ "$name" == "macos"* ]]; then
-              # macOS 打包为 zip
+            if [[ "$name" == macos* ]]; then
               cd "$dir" && zip -r "../../release/${name}.zip" . && cd ../..
             else
-              tar -czf "release/${name}.${ext}" -C "$dir" .
+              tar -czf "release/${name}.tar.gz" -C "$dir" .
             fi
           done
           ls -lh release/
